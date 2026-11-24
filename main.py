@@ -1,66 +1,71 @@
-"""Deterministic excuse generator for kiencx excuse bounty round 3. The competition gate is 1..160 characters and the output must be a single line."""
+#!/usr/bin/env python3
+"""Write the winning one-line excuse to /output/entry.txt.
+
+The excuse itself is fixed by the competition entry; this script only
+puts that exact sentence, plus a single newline, into the output file
+after checking it still meets the length and shape rules.
+"""
 
 import os
 import shutil
 import sys
 
-MAX_CHARS = 160
-LINE = "I finished the task at 9am, then spent the day perfecting the status update announcing I'd finished it."
+SENTENCE = "I finished the task at 9am, then spent the day perfecting the status update announcing I'd finished it."
+OUT_FOLDER = "/output"
+OUT_PATH = os.path.join(OUT_FOLDER, "entry.txt")
 
-def main() -> None:
-    # 1. Validation
-    if not (1 <= len(LINE) <= MAX_CHARS):
-        sys.stderr.write(f"Error: line length {len(LINE)} is not between 1 and {MAX_CHARS} characters\n")
-        sys.exit(1)
 
-    if "\n" in LINE or "\r" in LINE:
-        sys.stderr.write("Error: line contains newline characters\n")
-        sys.exit(1)
+def sentence_is_shaped_okay(text):
+    """Return True only if the sentence is one non-blank line of 1-160 chars."""
+    if not text.strip():
+        return False
+    if "\n" in text or "\r" in text:
+        return False
+    if not 1 <= len(text) <= 160:
+        return False
+    return True
 
-    if not LINE.strip():
-        sys.stderr.write("Error: line cannot be only whitespace\n")
-        sys.exit(1)
 
-    # 2. Clear contents of /output without removing the directory itself
-    output_dir = "/output"
-    os.makedirs(output_dir, exist_ok=True)
-    for name in os.listdir(output_dir):
-        path = os.path.join(output_dir, name)
-        if os.path.isdir(path) and not os.path.islink(path):
-            shutil.rmtree(path)
-        else:
-            os.unlink(path)
+def empty_folder_but_keep_it(folder):
+    """Delete everything inside folder, leaving folder itself in place."""
+    os.makedirs(folder, exist_ok=True)
+    for name in os.listdir(folder):
+        target = os.path.join(folder, name)
+        if os.path.islink(target) or os.path.isfile(target):
+            os.unlink(target)
+        elif os.path.isdir(target):
+            shutil.rmtree(target)
 
-    # 3. Write line with single trailing newline, UTF-8, chmod 0644
-    entry_path = os.path.join(output_dir, "entry.txt")
-    target_data = LINE + "\n"
-    with open(entry_path, "w", encoding="utf-8") as f:
-        f.write(target_data)
-    os.chmod(entry_path, 0o644)
 
-    # 4. Read back and verify
-    with open(entry_path, "r", encoding="utf-8") as f:
-        read_back = f.read()
+def main():
+    if not sentence_is_shaped_okay(SENTENCE):
+        print("excuse failed validation", file=sys.stderr)
+        return 1
 
-    if read_back != target_data:
-        sys.stderr.write("Error: verification failed; read content does not match expected output\n")
-        sys.exit(1)
+    empty_folder_but_keep_it(OUT_FOLDER)
 
-    with open(entry_path, "rb") as f:
-        raw_bytes = f.read()
+    payload = (SENTENCE + "\n").encode("utf-8")
+    with open(OUT_PATH, "wb") as handle:
+        handle.write(payload)
+    os.chmod(OUT_PATH, 0o644)
 
-    try:
-        raw_bytes.decode("utf-8")
-    except UnicodeDecodeError:
-        sys.stderr.write("Error: raw bytes failed UTF-8 decoding\n")
-        sys.exit(1)
+    with open(OUT_PATH, "rb") as handle:
+        written = handle.read()
+    if written != payload:
+        print("read-back mismatch", file=sys.stderr)
+        return 1
+    # Second check: the bytes on disk must decode as clean UTF-8 and
+    # end with exactly one trailing newline, no more and no fewer.
+    if written.decode("utf-8") != SENTENCE + "\n":
+        print("utf-8 round-trip mismatch", file=sys.stderr)
+        return 1
+    if not written.endswith(b"\n") or written.endswith(b"\n\n"):
+        print("trailing newline count wrong", file=sys.stderr)
+        return 1
 
-    if raw_bytes.count(b"\n") != 1 or not raw_bytes.endswith(b"\n"):
-        sys.stderr.write("Error: file raw bytes must contain exactly one newline, at the end\n")
-        sys.exit(1)
+    print(f"{len(SENTENCE)} OK")
+    return 0
 
-    # 5. Print character count and OK
-    print(len(LINE), "OK")
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())
