@@ -1,0 +1,7 @@
+kit/
+TASK*.md
+PROGRESS.md
+REPORT.md
+bundle/
+*.tar.gz
+__pycache__/
